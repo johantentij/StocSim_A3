@@ -29,15 +29,16 @@ for k in range(6):
 
    
     for j in range(100):
-        jumpPos = (j == jumps[:, 0])
+        jumpPos = (j + k + 1 == jumps[:, 0])
         if np.sum(jumpPos):
-            T[jumps[jumpPos, 1], jumps[jumpPos, 0]] = 1
+            T[jumps[jumpPos, 1], j] = 1
         else:
             T[j + k + 1 , j] = 1
 
     T_terms.append(sp.csr_array(T))
 
 overshoot = np.zeros(107)
+overshoot[-6:] = 1
 overshoot = sp.csr_array(overshoot)
 
 makeSquare = np.concatenate((np.identity(101), np.zeros((101, 6))), axis=1)
@@ -57,7 +58,7 @@ def exactExpectedLength(p):
 
     return E[0]
 
-def step(prevL, p, perturbation, temperature, N=1000):
+def step(prevL, p, perturbation, temperature):
     # propose a new die
     proposed = p + np.random.normal(0, perturbation, 6)
     proposed[proposed < 0] = 0
@@ -65,7 +66,7 @@ def step(prevL, p, perturbation, temperature, N=1000):
 
     newL = exactExpectedLength(proposed)
 
-    alpha = np.min((1, np.exp(-temperature * (newL - prevL))))
+    alpha = np.min((1, np.exp(-(newL - prevL) / temperature)))
 
     if np.random.rand() <= alpha:
         return newL, proposed
@@ -82,7 +83,7 @@ def MetropolisHastings(p_0, perturbation, steps=1000, temperature=10):
 
     return gameLengths, p
 
-gameLengths, p = MetropolisHastings(np.ones(6), 1e-2, temperature=20)
+gameLengths, p = MetropolisHastings(np.ones(6), 1e-2, temperature=0.1)
 
 plt.plot(gameLengths[1:])
 plt.title("Metropolis-Hastings")
