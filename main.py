@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy import stats
+from grid import GridGen
 
 snakes = np.array([[17, 7],
                    [54, 34],
@@ -21,28 +22,29 @@ ladders = np.array([[1, 38],
 
 jumps = np.concatenate((snakes, ladders))
 
-def uniformDie():
-    return np.random.randint(1, 7)
 
-def geometricDie(p=0.5):
-    return np.random.geometric(p)
+def uniformDie(u):
+    return int(6 * u) + 1
 
-def levyDie():
-    p = np.random.random()
-    
-    if p < 0.90:
-        return np.random.randint(1, 7)
-    
+def geometricDie(u, p=0.5):
+    return int(np.floor(np.log(1 - u) / np.log(1 - p))) + 1
+
+def levyDie(u):
+    if u < 0.9:
+        v = u / 0.9
+        return int(6 * v) + 1
     else:
-        return np.random.randint(10, 31) 
+        v = (u - 0.9) / 0.1   
+        return int(21 * v) + 10
 
-def playGame(die):
+
+def playGame(die, jumps):
     pos = 0
-
     turnCount = 0
     jumpCount = 0
     while (pos != 100):
-        nextPos = pos + die()
+        u = np.random.random()
+        nextPos = pos + die(u)
 
         jumpPos = (nextPos == jumps[:, 0])
         if np.sum(jumpPos):
@@ -56,36 +58,69 @@ def playGame(die):
 
     return turnCount, jumpCount
 
-N = 1000
-p = 0.2
-die = lambda : geometricDie(p)
 
+def playAntitheticGame(die, jumps, board_size=100):
+    pos_1, pos_2 = 0, 0
+    turnCount_1, turnCount_2 = 0, 0
+
+    def check_jump(u, pos):
+        nextPos = pos + die(u)
+
+        if nextPos > board_size:
+            return pos
+
+        jumpPos = (nextPos == jumps[:, 0])
+        if np.any(jumpPos):
+            nextPos = jumps[jumpPos, 1][0]
+
+        return nextPos
+
+    while pos_1 != board_size or pos_2 != board_size:
+        u = np.random.random()
+
+        if pos_1 != board_size:
+            pos_1 = check_jump(u, pos_1)
+            turnCount_1 += 1
+
+        if pos_2 != board_size:
+            pos_2 = check_jump(1 - u, pos_2)
+            turnCount_2 += 1
+
+    return turnCount_1, turnCount_2
+
+
+# Histogram of game length for random grids
+N = 10000
+p = 0.2
+die = lambda u: uniformDie(u)
 turnDist = np.empty(N)
 jumpDist = np.empty(N)
+gg = GridGen(ladders, snakes,100)
 for i in range(N):
-    turnDist[i], jumpDist[i] = playGame(die)
+    new_ladders, new_snakes = gg.gen_grid()
+    new_jumps = np.concatenate((new_ladders, new_snakes))
+    turnDist[i], jumpDist[i] = playGame(die, new_jumps)
 
-plt.hist(turnDist, density=True)
+plt.hist(turnDist, bins=100, density=True)
 plt.title("Number of turns before game ends")
 plt.xlabel("Number of turns")
 plt.ylabel("Density of occurence")
 plt.show()
 
 
-
-N = 1000
-
+# Game length normal vs levy die
+N = 10000
 turns_normal = np.zeros(N)
 times_normal = np.zeros(N)
 turns_levy = np.zeros(N)
 times_levy = np.zeros(N)
 
 for i in range(N):
-    t, time = playGame(uniformDie)
+    t, time = playGame(uniformDie, jumps)
     turns_normal[i] = t
     times_normal[i] = time
     
-    t, time = playGame(levyDie)
+    t, time = playGame(levyDie, jumps)
     turns_levy[i] = t
     times_levy[i] = time
 
@@ -94,6 +129,25 @@ mean_levy = np.mean(turns_levy)
 print(mean_levy)
 print(mean_normal)
 
+
+# Antithetic covariance test
+N = 1000000
+T1 = np.zeros(N)
+T2 = np.zeros(N)
+
+for i in range(N):
+    t1, t2 = playAntitheticGame(levyDie, jumps)
+    T1[i] = t1
+    T2[i] = t2
+
+cov = np.cov(T1, T2, ddof=1)[0, 1]
+corr = np.corrcoef(T1, T2)[0, 1]
+
+print("Covariance:", cov)
+print("Correlation:", corr)
+
+
+# Stat tests
 sem_normal = stats.sem(turns_normal)
 sem_levy = stats.sem(turns_levy)
 
@@ -106,3 +160,4 @@ if p < 0.05:
     print("Significant statistical difference found.")
 else:
     print("No significant statistical difference found.")
+
