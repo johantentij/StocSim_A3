@@ -55,8 +55,8 @@ for k in range(6):
 
     T_terms.append(sp.csr_array(T))
 
-overshoot = np.zeros((1, 107))
-overshoot[0, -6:] = 1
+overshoot = np.zeros(107)
+overshoot[-6:] = 1
 overshoot = sp.csr_array(overshoot)
 
 makeSquare = np.concatenate((np.identity(101), np.zeros((101, 6))), axis=1)
@@ -103,8 +103,8 @@ def exactExpectedLength(p):
     for i in range(6):
         T += p[i] * T_terms[i]
 
-    T_square = makeSquare.dot(T) + sp.diags(overshoot.dot(T).toarray().ravel(), 0)
-    T = T_square[:100, :100]
+    T = makeSquare.dot(T) + sp.diags(overshoot.dot(T).toarray(), 0)
+    T.resize((100, 100))
 
     try:
         E = sp.linalg.spsolve(I - T.T, np.ones(100))
@@ -219,50 +219,3 @@ plt.show()
 # plt.ylabel("Probability of game ending")
 # plt.legend()
 # plt.show()
-
-def SimulatedAnnealing(p_0, perturbation, steps=5000, temperature=10.0, cooling_rate=0.995):
-    p = p_0 / np.sum(p_0)
-    
-    gameLengths = np.empty(steps)
-    gameLengths[0] = exactExpectedLength(p)
-    
-    best_p = p.copy()
-    best_len = gameLengths[0]
-
-    for i in range(1, steps):
-        gameLengths[i], p = step(gameLengths[i - 1], p, perturbation, temperature)
-        
-        if gameLengths[i] < best_len:
-            best_len = gameLengths[i]
-            best_p = p.copy()
-            
-        temperature *= cooling_rate
-
-    return gameLengths, best_p
-
-p_init = np.ones(6)
-history, best_die = SimulatedAnnealing(p_init, perturbation=0.05, steps=5000, temperature=2.0, cooling_rate=0.995)
-
-plt.figure(figsize=(10, 4))
-plt.subplot(1, 2, 1)
-plt.plot(history)
-plt.title("Simulated Annealing Convergence")
-plt.xlabel("Iteration")
-plt.ylabel("Expected Game Length")
-
-plt.subplot(1, 2, 2)
-plt.bar(np.arange(6) + 1, best_die, color='orange', alpha=0.7)
-plt.title("Optimised Die PMF")
-plt.xlabel("Roll")
-plt.ylabel("Probability")
-plt.tight_layout()
-plt.show()
-
-print("-" * 30)
-print("Optimization Results")
-print("-" * 30)
-print(f"Initial Expected Length: {exactExpectedLength(p_init / np.sum(p_init)):.4f}")
-print(f"Minimum Expected Length: {exactExpectedLength(best_die):.4f}")
-print("Optimised Die PMF:")
-print(np.round(best_die, 4))
-print("-" * 30)
