@@ -4,40 +4,59 @@ from scipy import stats
 
 import scipy.sparse as sp
 
-snakes = np.array([[17, 7],
-                   [54, 34],
-                   [62, 19],
-                   [64, 60],
-                   [93, 73],
-                   [95, 75],
-                   [98, 79]])
+# snakes = np.array([[17, 7],
+#                    [54, 34],
+#                    [62, 19],
+#                    [64, 60],
+#                    [93, 73],
+#                    [95, 75],
+#                    [98, 79]])
 
-ladders = np.array([[1, 38], 
-                    [4, 14], 
-                    [9, 31],
-                    [21, 42],
-                    [28, 84],
-                    [51, 67],
-                    [71, 91],
-                    [80, 99]])
+# ladders = np.array([[1, 38], 
+#                     [4, 14], 
+#                     [9, 31],
+#                     [21, 42],
+#                     [28, 84],
+#                     [51, 67],
+#                     [71, 91],
+#                     [80, 99]])
 
 # more cheating resistant board
-# snakes = np.array([[27,  7],
-#                    [50, 30],
-#                    [55, 35],
-#                    [68, 48],
-#                    [71, 61],
-#                    [77, 67],
-#                    [94, 84]])
+snakes = np.array([[27,  7],
+                   [50, 30],
+                   [55, 35],
+                   [68, 48],
+                   [71, 61],
+                   [77, 67],
+                   [94, 84]])
 
-# ladders = np.array([[4, 25],
-#                     [10, 32],
-#                     [36, 52],
-#                     [43, 80],
-#                     [46, 66],
-#                     [63, 73],
-#                     [64, 83],
-#                     [75, 85]])
+ladders = np.array([[4, 25],
+                    [10, 32],
+                    [36, 52],
+                    [43, 80],
+                    [46, 66],
+                    [63, 73],
+                    [64, 83],
+                    [75, 85]])
+
+# board with best die = always roll 1
+# snakes = np.array([[36, 32],
+#  [54, 34],
+#  [61, 51],
+#  [66, 62],
+#  [67, 48],
+#  [93, 74],
+#  [95, 75]])
+
+# ladders = np.array([[3, 13],
+#  [17, 73],
+#  [24, 43],
+#  [31, 41],
+#  [49, 68],
+#  [57, 78],
+#  [81, 97],
+#  [82, 92]])
+
 
 jumps = np.concatenate((snakes, ladders))
 
@@ -62,7 +81,7 @@ overshoot = sp.csr_array(overshoot)
 makeSquare = np.concatenate((np.identity(101), np.zeros((101, 6))), axis=1)
 makeSquare = sp.csr_array(makeSquare)
 
-def makeDistribution(p, maxThrows=200):
+def makeDistribution(p, maxThrows=500):
     T = sp.csr_array((107, 101))
 
     for i in range(6):
@@ -143,9 +162,9 @@ def MetropolisHastings(p_0, perturbation=1e-2, steps=1000, gradientFunc=None, te
 
     p = p_0 / np.sum(p_0)
 
-    basePmf = makeDistribution(p)
+    basePmf = makeDistribution(np.ones(6) / 6)
     advantages = np.empty(steps)
-    advantages[0] = .5
+    advantages[0] = winningPercentage(makeDistribution(p), basePmf)
 
     for i in range(1, steps):
         # propose a new die
@@ -173,22 +192,37 @@ def expGradient(i, steps, start, end):
 def linGradient(i, steps, start, end):
     return start + (end - start) * i / (steps - 1)
 
-gradientFunc = lambda i : expGradient(i, 1000, 1e-2, 1e-4)
-# gradientFunc = lambda i : linGradient(i, 1000, 1e-1, 1e-4)
 
-advantages, p = MetropolisHastings(np.ones(6), steps=1000, gradientFunc=gradientFunc)
+N = 50
+steps = 1000
+advantages = np.empty((N, steps))
+dies = np.empty((N, 6))
 
-meanThrow = np.sum((np.arange(6) + 1) * p)
+gradientFunc = lambda i : expGradient(i, steps, 1e-1, 1e-4)
+
+for i in range(N):
+    print("run %d out of %d" % (i, N))
+    p_0 = np.random.random(6)
+    p_0 /= np.sum(p_0)
+
+    advantages[i], dies[i] = MetropolisHastings(p_0, steps=steps, gradientFunc=gradientFunc)
 
 # simulated annealing plot
-plt.plot(advantages[1:])
+for i in range(N):
+    plt.plot(advantages[i, :], color="C0", alpha=0.2)
+
 plt.title("Metropolis-Hastings")
 plt.xlabel("Steps")
 plt.ylabel("Winning chance with biased die")
 plt.figure()
 
-plt.bar(np.arange(6) + 1, p)
-plt.vlines(meanThrow, 0, np.max(p), linestyle="dashed", color="grey")
+best = np.argmax(advantages[:, -1])
+bestDie = dies[best, :]
+meanThrow = np.sum(np.arange(1, 7) * bestDie)
+print("best advantage: %f" % advantages[best, -1])
+
+plt.bar(np.arange(6) + 1, bestDie)
+plt.vlines(meanThrow, 0, np.max(bestDie), linestyle="dashed", color="grey")
 plt.title("PMF of optimised die")
 plt.xlabel("Roll")
 plt.ylabel("Probability")
