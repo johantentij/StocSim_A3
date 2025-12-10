@@ -48,6 +48,27 @@ class GridGen():
             np.sum(snake_starts <= 49),
             np.sum(snake_starts >= 50)
         ]
+
+        # region-specific length distributions
+        self.ladder_lengths_by_region = []
+        self.snake_lengths_by_region = []
+
+        for (low, high) in self.region_bounds:
+            mask_l = (ladder_starts >= low) & (ladder_starts <= high)
+            region_ladders = self.ladders[mask_l]
+            ladder_lengths = [abs(y - x) for (x, y) in region_ladders]
+
+            mask_s = (snake_starts >= low) & (snake_starts <= high)
+            region_snakes = self.snakes[mask_s]
+            snake_lengths = [abs(x - y) for (x, y) in region_snakes]
+
+            if len(ladder_lengths) == 0:
+                ladder_lengths = self.distances[0]
+            if len(snake_lengths) == 0:
+                snake_lengths = self.distances[1]
+
+            self.ladder_lengths_by_region.append(ladder_lengths)
+            self.snake_lengths_by_region.append(snake_lengths)
     
     # L_idx:
     # 0 : ladders
@@ -64,6 +85,8 @@ class GridGen():
             tries = 0
             low, high = self.region_bounds[r]
 
+            region_lengths = lengths[r]
+
             while sum(
                 1 for (start, _) in new_list
                 if low <= start <= high
@@ -74,7 +97,7 @@ class GridGen():
                 tries += 1
 
                 # Sample length by bootstrap
-                length = self.bootstrap_sample(lengths)
+                length = self.bootstrap_sample(region_lengths)
 
                 # Sample start in this region
                 s_low, s_high = low, high
@@ -109,7 +132,7 @@ class GridGen():
         new_snakes = self._generate_jumps(
             is_snake=True,
             region_counts=self.snake_region_counts,
-            lengths=self.distances[1] ,
+            lengths=self.snake_lengths_by_region,
             used=used,
             max_tries=max_tries
         )
@@ -118,7 +141,7 @@ class GridGen():
         new_ladders = self._generate_jumps(
             is_snake=False,
             region_counts=self.ladder_region_counts,
-            lengths=self.distances[0],
+            lengths=self.ladder_lengths_by_region,
             used=used,
             max_tries=max_tries
         )
